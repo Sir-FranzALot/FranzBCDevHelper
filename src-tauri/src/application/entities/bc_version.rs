@@ -1,5 +1,4 @@
 use crate::application::entities::EntityError;
-use anyhow::{bail, Context, Ok, Result};
 use std::fmt;
 use std::str::FromStr;
 
@@ -14,7 +13,7 @@ pub struct BcVersion {
 impl FromStr for BcVersion {
     type Err = anyhow::Error;
 
-    fn from_str(version: &str) -> Result<Self> {
+    fn from_str(version: &str) -> Result<Self, BCVersionError> {
         if version.is_empty() {
             bail!("Version is empty")
         }
@@ -52,4 +51,10 @@ impl fmt::Display for BcVersion {
             self.major, self.minor, self.build, self.revision
         )
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum BCVersionError {
+    #[error("failed to parse int: {0}")]
+    ParseInt(#[from] std::num::ParseIntError),
 }
