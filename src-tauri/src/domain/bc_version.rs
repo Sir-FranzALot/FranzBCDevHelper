@@ -1,4 +1,3 @@
-use crate::application::entities::EntityError;
 use std::fmt;
 use std::str::FromStr;
 
@@ -11,11 +10,11 @@ pub struct BcVersion {
 }
 
 impl FromStr for BcVersion {
-    type Err = anyhow::Error;
+    type Err = BCVersionError;
 
     fn from_str(version: &str) -> Result<Self, BCVersionError> {
         if version.is_empty() {
-            bail!("Version is empty")
+            return Err(BCVersionError::ParseVersion(version.to_string()));
         }
         let mut parts = version.split('.');
 
@@ -29,7 +28,7 @@ impl FromStr for BcVersion {
             let revision = parts.next().map_or("0", |v| v).parse::<u32>()?;
 
             if parts.next().is_some() {
-                bail!("Version format not valid. More than 4 segments.");
+                return Err(BCVersionError::ParseVersion(version.to_string()));
             }
 
             Ok(Self {
@@ -39,7 +38,6 @@ impl FromStr for BcVersion {
                 revision,
             })
         }
-        .with_context(|| format!("Failed to parse version: {}", version))
     }
 }
 
@@ -55,6 +53,9 @@ impl fmt::Display for BcVersion {
 
 #[derive(Debug, thiserror::Error)]
 pub enum BCVersionError {
-    #[error("failed to parse int: {0}")]
+    #[error("failed to parse version segment: {0}")]
     ParseInt(#[from] std::num::ParseIntError),
+
+    #[error("failed to parse version: {0}")]
+    ParseVersion(String),
 }

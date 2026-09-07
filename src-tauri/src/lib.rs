@@ -14,6 +14,7 @@ mod application;
 mod bc;
 mod bc_container;
 mod commands;
+mod domain;
 mod git;
 mod infrastructure;
 mod utils;
