@@ -1,44 +1,48 @@
 use crate::{
-    application::{error::AppError, ports::container::ContainerRepository},
+    application::{error::AppError, ports::docker::DockerRepository},
     domain::{Container, Image},
 };
 use bollard::config::ContainerCreateBody;
-use bollard::query_parameters::{CreateContainerOptionsBuilder, ListImagesOptionsBuilder};
-use bollard::Docker;
+use bollard::query_parameters::{
+    BuildImageOptionsBuilder, CreateContainerOptionsBuilder, ListImagesOptionsBuilder,
+};
+use bollard::{body_full, Docker};
+use bytes::Bytes;
+use futures_util::StreamExt;
 
-struct DockerContainerRepository {
+struct BollardDockerRepository {
     docker: Docker,
 }
 
-impl DockerContainerRepository {
-    fn new(docker: Docker) -> DockerContainerRepository {
-        DockerContainerRepository { docker }
+impl BollardDockerRepository {
+    fn new(docker: Docker) -> BollardDockerRepository {
+        BollardDockerRepository { docker }
     }
 }
 
-impl ContainerRepository for DockerContainerRepository {
-    async fn start(&self, container: &Container) -> Result<(), AppError> {
+impl DockerRepository for BollardDockerRepository {
+    async fn start_container(&self, container: &Container) -> Result<(), AppError> {
         self.docker
             .start_container(container.name(), None)
             .await
             .or_else(|err| Err(AppError::Repository(err.to_string())))
     }
 
-    async fn stop(&self, container: &Container) -> Result<(), AppError> {
+    async fn stop_container(&self, container: &Container) -> Result<(), AppError> {
         self.docker
             .stop_container(container.name(), None)
             .await
             .or_else(|err| Err(AppError::Repository(err.to_string())))
     }
 
-    async fn remove(&self, container: &Container) -> Result<(), AppError> {
+    async fn remove_container(&self, container: &Container) -> Result<(), AppError> {
         self.docker
             .remove_container(container.name(), None)
             .await
             .or_else(|err| Err(AppError::Repository(err.to_string())))
     }
 
-    async fn create(&self, image: &Image, name: &str) -> Result<(), AppError> {
+    async fn create_container(&self, image: &Image, name: &str) -> Result<(), AppError> {
         let options = ListImagesOptionsBuilder::default().all(true).build();
         let images = self
             .docker
@@ -103,7 +107,47 @@ impl ContainerRepository for DockerContainerRepository {
         Ok(containers)
     }
 
-    async fn inspect(&self, name: &str) -> Result<Container, AppError> {
+    async fn inspect_container(&self, name: &str) -> Result<Container, AppError> {
         todo!()
+    }
+
+    async fn remove_image(&self, image: &Image) -> Result<(), AppError> {
+        todo!()
+    }
+
+    async fn inspect_image(&self, name: &str) -> Result<Image, AppError> {
+        let image = self
+            .docker
+            .inspect_image(name)
+            .await
+            .map_err(|err| AppError::Repository(err.to_string()))?;
+
+        let id = match image.id {
+            Some(v) => v,
+            None => "NA".to_string(),
+        };
+
+        Ok(Image::new(id, name.to_string()))
+    }
+
+    async fn build_image(&self, tar_data: Vec<u8>, image_name: &str) -> Result<(), AppError> {
+        let options = BuildImageOptionsBuilder::default() // TODO add memory parameter when fixed by bollard
+            .dockerfile("dockerfile")
+            .t(image_name)
+            .rm(true)
+            .build();
+
+        let mut stream =
+            self.docker
+                .build_image(options, None, Some(body_full(Bytes::from(tar_data))));
+
+        while let Some(result) = stream.next().await {
+            match result {
+                Ok(_) => (),
+                Err(err) => return Err(AppError::Repository(err.to_string())),
+            }
+        }
+
+        Ok(())
     }
 }

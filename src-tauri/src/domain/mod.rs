@@ -9,3 +9,6 @@ pub use image::Image;
 
 mod error;
 pub use error::DomainError;
+
+pub mod artifact;
+pub mod manifest;
