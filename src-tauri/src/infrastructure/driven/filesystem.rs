@@ -1,4 +1,5 @@
 use crate::application::{error::AppError, ports::filesystem::FilesystemRepository};
+use async_trait::async_trait;
 use std::path::{Path, PathBuf};
 use tar::Builder;
 use tokio::fs;
@@ -6,18 +7,15 @@ use zip::ZipArchive;
 
 struct TauriFilesystemRepository {}
 
+#[async_trait]
 impl FilesystemRepository for TauriFilesystemRepository {
-    async fn create_dir_all(path: impl AsRef<Path>) -> Result<(), AppError> {
+    async fn create_dir_all(&self, path: &Path) -> Result<(), AppError> {
         fs::create_dir_all(path)
             .await
             .map_err(|err| AppError::Repository(err.to_string()))
     }
 
-    async fn copy_dir_recursively(
-        &self,
-        src: impl AsRef<Path>,
-        dst: impl AsRef<Path>,
-    ) -> Result<(), AppError> {
+    async fn copy_dir_recursively(&self, src: &Path, dst: &Path) -> Result<(), AppError> {
         fs::create_dir_all(&dst)
             .await
             .map_err(|err| AppError::Repository(err.to_string()))?;
@@ -34,13 +32,11 @@ impl FilesystemRepository for TauriFilesystemRepository {
                 .await
                 .map_err(|err| AppError::Repository(err.to_string()))?;
             if ty.is_dir() {
-                Box::pin(
-                    self.copy_dir_recursively(entry.path(), dst.as_ref().join(entry.file_name())),
-                )
-                .await
-                .map_err(|err| AppError::Repository(err.to_string()))?;
+                Box::pin(self.copy_dir_recursively(&entry.path(), &dst.join(entry.file_name())))
+                    .await
+                    .map_err(|err| AppError::Repository(err.to_string()))?;
             } else {
-                fs::copy(entry.path(), dst.as_ref().join(entry.file_name()))
+                fs::copy(&entry.path(), &dst.join(entry.file_name()))
                     .await
                     .map_err(|err| AppError::Repository(err.to_string()))?;
             }
@@ -48,7 +44,7 @@ impl FilesystemRepository for TauriFilesystemRepository {
         Ok(())
     }
 
-    async fn compress_dir(path: PathBuf) -> Result<Vec<u8>, AppError> {
+    async fn compress_dir(&self, path: PathBuf) -> Result<Vec<u8>, AppError> {
         let tar_data = tokio::task::spawn_blocking(move || -> Result<Vec<u8>, std::io::Error> {
             let mut archive = Builder::new(Vec::new());
             archive.append_dir_all("", path)?;
@@ -64,7 +60,7 @@ impl FilesystemRepository for TauriFilesystemRepository {
         Ok(tar_data)
     }
 
-    async fn extract_zip(src: &Path, dst: &Path) -> Result<(), AppError> {
+    async fn extract_zip(&self, src: &Path, dst: &Path) -> Result<(), AppError> {
         let temp_extract_path = dst.with_extension("extracting");
 
         if temp_extract_path

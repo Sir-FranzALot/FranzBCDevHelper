@@ -5,21 +5,21 @@ use anyhow::{bail, Context, Result};
 use reqwest::{self, StatusCode};
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 use url::Url;
+
+use crate::application::ports::{filesystem::FilesystemRepository, requests::RequestRepository};
+use crate::domain::artifact_request::ArtifactRequest;
 
 // TODO Testing
 // TODO implement function that checks if country and deployment type are valid to prevent creation of wrong paths
 // TODO Concurrent resolve() calls can corrupt each other
 
-pub struct ArtifactRequest {
-    pub deployment_type: String,
-    pub version: BcVersion,
-    pub country: String,
-}
-
 pub struct ArtifactResolver {
+    fs_repository: Arc<dyn FilesystemRepository>,
+    rs_repository: Arc<dyn RequestRepository>,
     client: reqwest::Client,
     base_url: Url,
     cache_path: PathBuf,
@@ -34,8 +34,14 @@ impl ArtifactResolver {
     /// ```
     ///
     /// `state` = `AppState`
-    pub fn new(cache_path: PathBuf) -> Self {
+    pub fn new(
+        fs_repository: Arc<dyn FilesystemRepository>,
+        rs_repository: Arc<dyn RequestRepository>,
+        cache_path: PathBuf,
+    ) -> Self {
         Self {
+            fs_repository,
+            rs_repository,
             client: reqwest::Client::new(), // TODO think about timeouts
             base_url: Url::parse("https://bcartifacts-exdbf9fwegejdqak.b02.azurefd.net").unwrap(), // TODO additional URLs, also no unwrap
             cache_path,

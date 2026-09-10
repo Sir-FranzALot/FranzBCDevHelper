@@ -11,4 +11,5 @@ mod error;
 pub use error::DomainError;
 
 pub mod artifact;
+pub mod artifact_request;
 pub mod manifest;
